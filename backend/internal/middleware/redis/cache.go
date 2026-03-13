@@ -3,6 +3,8 @@ package redis
 import (
 	"context"
 	"time"
+
+	"github.com/redis/go-redis/v9"
 )
 
 func (c *Client) GetBytes(ctx context.Context, key string) ([]byte, error) {
@@ -15,4 +17,8 @@ func (c *Client) SetBytes(ctx context.Context, key string, value []byte, ttl tim
 
 func (c *Client) Del(ctx context.Context, key string) error {
 	return c.rdb.Del(ctx, key).Err()
+}
+
+func (c *Client) MGet(cacheCtx context.Context, cacheKeys ...string) *redis.SliceCmd {
+	return c.rdb.MGet(cacheCtx, cacheKeys...)
 }
