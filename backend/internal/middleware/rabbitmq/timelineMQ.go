@@ -19,7 +19,7 @@ const (
 
 type TimelineEvent struct {
 	EventID    string    `json:"event_id"`
-	ViedoID    uint      `json:"video_id"`
+	VideoID    uint      `json:"video_id"`
 	CreateTime int64     `json:"create_time"`
 	OccurredAt time.Time `json:"occurred_at"`
 }
@@ -36,7 +36,7 @@ func NewTimelineMQ(base *RabbitMQ) (*TimelineMQ, error) {
 
 func (t *TimelineMQ) PublishVideo(ctx context.Context, videoID uint, createTime time.Time) error {
 	if t == nil || t.RabbitMQ == nil {
-		return errors.New("timelike mq is not initialized")
+		return errors.New("timeline mq is not initialized")
 	}
 	if videoID == 0 {
 		return errors.New("videoID are required")
@@ -47,7 +47,7 @@ func (t *TimelineMQ) PublishVideo(ctx context.Context, videoID uint, createTime 
 	}
 	timeline := TimelineEvent{
 		EventID:    id,
-		ViedoID:    videoID,
+		VideoID:    videoID,
 		CreateTime: createTime.UnixMilli(),
 		OccurredAt: time.Now(),
 	}

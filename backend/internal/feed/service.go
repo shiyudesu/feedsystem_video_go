@@ -539,7 +539,7 @@ func (f *FeedService) buildFeedVideos(ctx context.Context, videos []*video.Video
 func buildOrderedResult(orderedIDs []uint, dataMap map[uint]*video.Video) []*video.Video {
 	res := make([]*video.Video, 0, len(orderedIDs))
 	for _, id := range orderedIDs {
-		if v, exit := dataMap[id]; exit && v != nil {
+		if v, exits := dataMap[id]; exits && v != nil {
 			res = append(res, v)
 		}
 	}

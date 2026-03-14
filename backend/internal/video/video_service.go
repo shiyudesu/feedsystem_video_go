@@ -50,14 +50,14 @@ func (vs *VideoService) Publish(ctx context.Context, video *Video) error {
 			return err
 		}
 
-		Msg := OutboxMsg{
+		msg := OutboxMsg{
 			VideoID:    video.ID,
 			EventType:  "video_published",
 			Status:     "pending",
 			CreateTime: video.CreateTime,
 		}
 
-		if err := tx.Create(Msg).Error; err != nil {
+		if err := tx.Create(&msg).Error; err != nil {
 			return err
 		}
 		return nil

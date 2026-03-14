@@ -23,15 +23,15 @@ func NewRabbitMQ(cfg *config.RabbitMQConfig) (*RabbitMQ, error) {
 		return nil, errors.New("rabbitmq config is nil")
 	}
 	url := "amqp://" + cfg.Username + ":" + cfg.Password + "@" + cfg.Host + ":" + strconv.Itoa(cfg.Port) + "/"
-	Conn, err := amqp.Dial(url)
+	conn, err := amqp.Dial(url)
 	if err != nil {
 		return nil, err
 	}
-	Ch, err := Conn.Channel()
+	ch, err := conn.Channel()
 	if err != nil {
 		return nil, err
 	}
-	return &RabbitMQ{Conn: Conn, Ch: Ch}, nil
+	return &RabbitMQ{Conn: conn, Ch: ch}, nil
 }
 
 func (r *RabbitMQ) Close() error {
