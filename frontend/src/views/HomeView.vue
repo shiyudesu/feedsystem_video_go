@@ -64,10 +64,34 @@ const currentState = computed(() => {
   return recommend
 })
 
+function normalizeFeedItems(items: FeedVideoItem[]): FeedVideoItem[] {
+  return items.map((raw) => {
+    const v = raw as Partial<FeedVideoItem>
+    return {
+      id: Number(v.id ?? 0),
+      author: {
+        id: Number(v.author?.id ?? 0),
+        username: typeof v.author?.username === 'string' && v.author.username ? v.author.username : 'unknown',
+      },
+      title: typeof v.title === 'string' ? v.title : '',
+      description: typeof v.description === 'string' ? v.description : '',
+      play_url: typeof v.play_url === 'string' ? v.play_url : '',
+      cover_url: typeof v.cover_url === 'string' ? v.cover_url : '',
+      create_time: Number(v.create_time ?? 0),
+      likes_count: Number(v.likes_count ?? 0),
+      is_liked: Boolean(v.is_liked),
+    }
+  })
+}
+
 const filteredItems = computed(() => {
   const items = currentState.value.items
   if (!q.value) return items
-  return items.filter((v) => v.title.toLowerCase().includes(q.value) || v.author.username.toLowerCase().includes(q.value))
+  return items.filter((v) => {
+    const title = typeof v.title === 'string' ? v.title.toLowerCase() : ''
+    const authorName = typeof v.author?.username === 'string' ? v.author.username.toLowerCase() : ''
+    return title.includes(q.value) || authorName.includes(q.value)
+  })
 })
 
 const activeItem = computed(() => filteredItems.value[activeIndex.value] ?? null)
@@ -158,7 +182,8 @@ async function loadRecommend(reset: boolean) {
     const res = await feedApi.listLatest({ limit: 10, latest_time: reset ? 0 : recommend.nextTime })
     recommend.hasMore = res.has_more
     recommend.nextTime = res.next_time
-    recommend.items = reset ? res.video_list : recommend.items.concat(res.video_list)
+    const next = normalizeFeedItems(res.video_list)
+    recommend.items = reset ? next : recommend.items.concat(next)
   } catch (e) {
     recommend.error = e instanceof ApiError ? e.message : String(e)
   } finally {
@@ -179,7 +204,8 @@ async function loadHot(reset: boolean) {
     hot.hasMore = res.has_more
     hot.nextLikesCountBefore = res.next_likes_count_before
     hot.nextIdBefore = res.next_id_before
-    hot.items = reset ? res.video_list : hot.items.concat(res.video_list)
+    const next = normalizeFeedItems(res.video_list)
+    hot.items = reset ? next : hot.items.concat(next)
   } catch (e) {
     hot.error = e instanceof ApiError ? e.message : String(e)
   } finally {
@@ -199,7 +225,8 @@ async function loadFollowing(reset: boolean) {
     const res = await feedApi.listByFollowing({ limit: 10, latest_time: reset ? 0 : following.nextTime })
     following.hasMore = res.has_more
     following.nextTime = res.next_time
-    following.items = reset ? res.video_list : following.items.concat(res.video_list)
+    const next = normalizeFeedItems(res.video_list)
+    following.items = reset ? next : following.items.concat(next)
   } catch (e) {
     following.error = e instanceof ApiError ? e.message : String(e)
   } finally {

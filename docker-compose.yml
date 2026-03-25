@@ -58,6 +58,9 @@ services:
       context: .
       dockerfile: backend/Dockerfile
       target: api
+      args:
+        GOPROXY: ${GOPROXY:-https://goproxy.cn,direct}
+        GOSUMDB: ${GOSUMDB:-sum.golang.google.cn}
     restart: always
     ports:
       - "8080:8080"
@@ -77,6 +80,9 @@ services:
       context: .
       dockerfile: backend/Dockerfile
       target: worker
+      args:
+        GOPROXY: ${GOPROXY:-https://goproxy.cn,direct}
+        GOSUMDB: ${GOSUMDB:-sum.golang.google.cn}
     restart: always
     volumes:
       - ./backend/configs/config.docker.yaml:/app/configs/config.yaml:ro
