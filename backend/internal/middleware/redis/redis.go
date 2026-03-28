@@ -77,3 +77,20 @@ func (c *Client) Unlock(ctx context.Context, key string, token string) error {
 	_, err := unlockScript.Run(ctx, c.rdb, []string{key}, token).Result()
 	return err
 }
+
+func (c *Client) IncrementWithExpire(ctx context.Context, key string, expire time.Duration) (int64, error) {
+	if c == nil || c.rdb == nil {
+		return 0, nil
+	}
+	count, err := c.rdb.Incr(ctx, key).Result()
+	if err != nil {
+		return 0, err
+	}
+	if count == 1 {
+		err = c.rdb.Expire(ctx, key, expire).Err()
+		if err != nil {
+			return 0, err
+		}
+	}
+	return count, nil
+}
