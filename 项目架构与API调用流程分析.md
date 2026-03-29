@@ -101,6 +101,7 @@ Gin Router -> Handler -> Service -> Repository -> MySQL
 - 连接 MySQL
 - 尝试连接 Redis
 - 尝试连接 RabbitMQ
+- 启动 API 侧 pprof（可配置开关）
 - 组装路由并启动 Gin Server
 
 #### 2. Worker 进程
@@ -112,6 +113,7 @@ Gin Router -> Handler -> Service -> Repository -> MySQL
 - 单独连接 MySQL、Redis、RabbitMQ
 - 监听多个 MQ 队列
 - 异步处理点赞、评论、关注、热度更新
+- 启动 Worker 侧 pprof（可配置开关）
 
 所以这个项目的写路径很多时候是“API 快速接入 -> 发 MQ -> Worker 异步落地”。
 
@@ -170,6 +172,16 @@ RabbitMQ 主要承担异步写任务：
 - `video.timeline.events`：新发布视频进入全局时间线
 
 也就是说，项目把“写扩散”和“缓存更新”从 API 线程中拆了出去。
+
+### 4.4 可观测性（pprof）
+
+项目在 API 与 Worker 两个进程都支持 pprof：
+
+- API 进程通过 `observability.NewPprofServer("API", ...)` 启动
+- Worker 进程通过 `observability.NewPprofServer("Worker", ...)` 启动
+- 开关和地址由配置文件中的 `observability.pprof` 控制
+
+这意味着可以在开发/排障时对 CPU、内存、阻塞等问题进行性能分析，而不需要改业务代码。
 
 ---
 
@@ -331,10 +343,10 @@ RabbitMQ 主要承担异步写任务：
 
 职责：
 
-- 最新视频流 `/feed/listLatest`
-- 点赞数排序 `/feed/listLikesCount`
-- 关注流 `/feed/listByFollowing`
-- 热榜 `/feed/listByPopularity`
+- 最新视频流 `/feed/listLatest`（可匿名，SoftJWT）
+- 点赞数排序 `/feed/listLikesCount`（可匿名，SoftJWT）
+- 关注流 `/feed/listByFollowing`（必须登录，JWT）
+- 热榜 `/feed/listByPopularity`（可匿名，SoftJWT）
 
 这是项目最复杂的读取模块，核心是“多级缓存 + 游标分页 + 热冷分离”。
 
@@ -375,6 +387,8 @@ RabbitMQ 主要承担异步写任务：
 - `LikeWorker`
 - `CommentWorker`
 - `PopularityWorker`
+
+当前 Worker 在 RabbitMQ 中声明并消费的队列名与 exchange 名同名（如 `like.events`、`comment.events`），通过 topic binding key（如 `like.*`）接收消息。
 
 ### 6.2 各 Worker 的职责
 
@@ -525,6 +539,7 @@ Authorization: Bearer <token>
 - 优先投递 MQ
 - Worker 异步落库或更新缓存
 - MQ 不可用时，再同步降级处理
+- 写接口会叠加账号维度限流（点赞/评论/关注）
 
 ---
 
@@ -566,12 +581,12 @@ postJson('/like/like', { video_id: videoId }, { authRequired: true })
 - 创建 `LikeService`
 - 创建 `LikeHandler`
 - 注册路由组 `/like`
-- 对 `/like/like` 挂 `JWTAuth`
+- 对 `/like/like` 挂 `JWTAuth + like_write 限流`
 
 所以该请求先进入：
 
 ```text
-JWTAuth -> LikeHandler.Like -> LikeService.Like
+JWTAuth -> RateLimit(like_write) -> LikeHandler.Like -> LikeService.Like
 ```
 
 ### 9.3 JWT 中间件处理
