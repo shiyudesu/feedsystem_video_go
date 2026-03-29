@@ -12,6 +12,7 @@ type Config struct {
 	Database DatabaseConfig `yaml:"database"`
 	Redis    RedisConfig    `yaml:"redis"`
 	RabbitMQ RabbitMQConfig `yaml:"rabbitmq"`
+	ObservabilityConfig ObservabilityConfig `yaml:"observability"`
 }
 
 type ServerConfig struct {
@@ -40,6 +41,14 @@ type RabbitMQConfig struct {
 	Password string `yaml:"password"`
 }
 
+type ObservabilityConfig struct {
+	Pprof PprofConfig `yaml:"pprof"`
+}
+type PprofConfig struct {
+	Enabled bool `yaml:"enabled"`
+	ApiAddr string `yaml:"api_addr"`
+	WorkerAddr string `yaml:"worker_addr"`
+}
 func Load(filename string) (Config, error) {
 	data, err := os.ReadFile(filename)
 	if err != nil {
@@ -89,6 +98,13 @@ func DefaultLocalConfig() Config {
 			Port:     5672,
 			Username: "admin",
 			Password: "password123",
+		},
+		ObservabilityConfig: ObservabilityConfig{
+			Pprof: PprofConfig{
+				Enabled: true,
+				ApiAddr: "localhost:6060",
+				WorkerAddr: "localhost:6061",
+			},
 		},
 	}
 }

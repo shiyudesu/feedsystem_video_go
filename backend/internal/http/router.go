@@ -4,28 +4,40 @@ import (
 	"feedsystem_video_go/internal/account"
 	"feedsystem_video_go/internal/feed"
 	"feedsystem_video_go/internal/middleware/jwt"
+	"feedsystem_video_go/internal/middleware/ratelimit"
 	"feedsystem_video_go/internal/middleware/rabbitmq"
 	rediscache "feedsystem_video_go/internal/middleware/redis"
 	"feedsystem_video_go/internal/social"
 	"feedsystem_video_go/internal/video"
 	"feedsystem_video_go/internal/worker"
 	"log"
-
+	"time"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )
 
 func SetRouter(db *gorm.DB, cache *rediscache.Client, rmq *rabbitmq.RabbitMQ) *gin.Engine {
 	r := gin.Default()
+	if err := r.SetTrustedProxies(nil); err != nil {
+		log.Printf("SetTrustedProxies failed: %v", err)
+	}
 	r.Static("/static", "./.run/uploads")
+	// rate_limit
+	loginLimiter := ratelimit.Limit(cache, "account_login", 10, time.Minute, ratelimit.KeyByIP)
+	registerLimiter := ratelimit.Limit(cache, "account_register", 5, time.Hour, ratelimit.KeyByIP)
+
+	likeLimiter := ratelimit.Limit(cache, "like_write", 30, time.Minute, ratelimit.KeyByAccount)
+	commentLimiter := ratelimit.Limit(cache, "comment_write", 10, time.Minute, ratelimit.KeyByAccount)
+	socialLimiter := ratelimit.Limit(cache, "social_write", 20, time.Minute, ratelimit.KeyByAccount)
+
 	// account
 	accountRepository := account.NewAccountRepository(db)
 	accountService := account.NewAccountService(accountRepository, cache)
 	accountHandler := account.NewAccountHandler(accountService)
 	accountGroup := r.Group("/account")
 	{
-		accountGroup.POST("/register", accountHandler.CreateAccount)
-		accountGroup.POST("/login", accountHandler.Login)
+		accountGroup.POST("/register", registerLimiter, accountHandler.CreateAccount)
+		accountGroup.POST("/login", loginLimiter, accountHandler.Login)
 		accountGroup.POST("/changePassword", accountHandler.ChangePassword)
 		accountGroup.POST("/findByID", accountHandler.FindByID)
 		accountGroup.POST("/findByUsername", accountHandler.FindByUsername)
@@ -70,8 +82,8 @@ func SetRouter(db *gorm.DB, cache *rediscache.Client, rmq *rabbitmq.RabbitMQ) *g
 	protectedLikeGroup := likeGroup.Group("")
 	protectedLikeGroup.Use(jwt.JWTAuth(accountRepository, cache))
 	{
-		protectedLikeGroup.POST("/like", likeHandler.Like)
-		protectedLikeGroup.POST("/unlike", likeHandler.Unlike)
+		protectedLikeGroup.POST("/like", likeLimiter, likeHandler.Like)
+		protectedLikeGroup.POST("/unlike", likeLimiter, likeHandler.Unlike)
 		protectedLikeGroup.POST("/isLiked", likeHandler.IsLiked)
 		protectedLikeGroup.POST("/listMyLikedVideos", likeHandler.ListMyLikedVideos)
 	}
@@ -91,8 +103,8 @@ func SetRouter(db *gorm.DB, cache *rediscache.Client, rmq *rabbitmq.RabbitMQ) *g
 	protectedCommentGroup := commentGroup.Group("")
 	protectedCommentGroup.Use(jwt.JWTAuth(accountRepository, cache))
 	{
-		protectedCommentGroup.POST("/publish", commentHandler.PublishComment)
-		protectedCommentGroup.POST("/delete", commentHandler.DeleteComment)
+		protectedCommentGroup.POST("/publish", commentLimiter, commentHandler.PublishComment)
+		protectedCommentGroup.POST("/delete", commentLimiter, commentHandler.DeleteComment)
 	}
 	// social
 	socialMQ, err := rabbitmq.NewSocialMQ(rmq)
@@ -107,8 +119,8 @@ func SetRouter(db *gorm.DB, cache *rediscache.Client, rmq *rabbitmq.RabbitMQ) *g
 	protectedSocialGroup := socialGroup.Group("")
 	protectedSocialGroup.Use(jwt.JWTAuth(accountRepository, cache))
 	{
-		protectedSocialGroup.POST("/follow", socialHandler.Follow)
-		protectedSocialGroup.POST("/unfollow", socialHandler.Unfollow)
+		protectedSocialGroup.POST("/follow", socialLimiter, socialHandler.Follow)
+		protectedSocialGroup.POST("/unfollow", socialLimiter, socialHandler.Unfollow)
 		protectedSocialGroup.POST("/getAllFollowers", socialHandler.GetAllFollowers)
 		protectedSocialGroup.POST("/getAllVloggers", socialHandler.GetAllVloggers)
 	}

@@ -50,3 +50,6 @@ npm run dev
 
 前端默认使用 Vite 代理 `/api` 到 `http://127.0.0.1:8080`（见 `frontend/vite.config.ts`）。
 
+## Star History
+
+[![Star History Chart](https://api.star-history.com/svg?repos=LeoninCS/feedsystem_video_go&type=Date)](https://www.star-history.com/#LeoninCS/feedsystem_video_go&Date)

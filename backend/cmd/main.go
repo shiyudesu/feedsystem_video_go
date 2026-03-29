@@ -7,6 +7,7 @@ import (
 	apphttp "feedsystem_video_go/internal/http"
 	rabbitmq "feedsystem_video_go/internal/middleware/rabbitmq"
 	rediscache "feedsystem_video_go/internal/middleware/redis"
+	"feedsystem_video_go/internal/observability"
 	"log"
 	"strconv"
 	"time"
@@ -64,6 +65,16 @@ func main() {
 		defer rmq.Close()
 		log.Printf("RabbitMQ connected")
 	}
+	// Pprof
+	pprofServer, err := observability.NewPprofServer(
+		"API",
+		cfg.ObservabilityConfig.Pprof.Enabled,
+		cfg.ObservabilityConfig.Pprof.ApiAddr,
+	)
+	if err != nil {
+		log.Printf("Failed to start API pprof server: %v", err)
+	}
+	defer pprofServer.Close()
 
 	// 设置路由
 	r := apphttp.SetRouter(sqlDB, cache, rmq)
