@@ -99,19 +99,23 @@ func (vs *VideoService) ListByAuthorID(ctx context.Context, authorID uint) ([]Vi
 func (vs *VideoService) GetDetail(ctx context.Context, id uint) (*Video, error) {
 	cacheKey := fmt.Sprintf("video:detail:id=%d", id)
 
-	getCached := func() (*Video, bool) {
+	getCached := func() (*Video, error) {
 		opCtx, cancel := context.WithTimeout(ctx, 50*time.Millisecond)
 		defer cancel()
 
 		b, err := vs.cache.GetBytes(opCtx, cacheKey)
 		if err != nil {
-			return nil, false
+			return nil, err
 		}
 		var cached Video
 		if err := json.Unmarshal(b, &cached); err != nil {
-			return nil, false
+			// 脏缓存直接删除，避免后续请求反复命中坏数据。
+			delCtx, delCancel := context.WithTimeout(ctx, 50*time.Millisecond)
+			defer delCancel()
+			_ = vs.cache.Del(delCtx, cacheKey)
+			return nil, err
 		}
-		return &cached, true
+		return &cached, nil
 	}
 
 	setCached := func(video *Video) {
@@ -125,19 +129,12 @@ func (vs *VideoService) GetDetail(ctx context.Context, id uint) (*Video, error) 
 	}
 
 	if vs.cache != nil {
-		if v, ok := getCached(); ok {
+		v, err := getCached()
+		if err == nil {
 			return v, nil
 		}
 
-		opCtx, cancel := context.WithTimeout(ctx, 50*time.Millisecond)
-		b, err := vs.cache.GetBytes(opCtx, cacheKey)
-		cancel()
-		if err == nil {
-			var cached Video
-			if err := json.Unmarshal(b, &cached); err == nil {
-				return &cached, nil
-			}
-		} else if rediscache.IsMiss(err) {
+		if rediscache.IsMiss(err) {
 			lockKey := "lock:" + cacheKey
 
 			lockCtx, lockCancel := context.WithTimeout(ctx, 50*time.Millisecond)
@@ -147,7 +144,8 @@ func (vs *VideoService) GetDetail(ctx context.Context, id uint) (*Video, error) 
 			if lockErr == nil && locked {
 				defer func() { _ = vs.cache.Unlock(context.Background(), lockKey, token) }()
 
-				if v, ok := getCached(); ok {
+				v, err := getCached()
+				if err == nil {
 					return v, nil
 				}
 
@@ -166,7 +164,8 @@ func (vs *VideoService) GetDetail(ctx context.Context, id uint) (*Video, error) 
 					return nil, ctx.Err()
 				case <-time.After(20 * time.Millisecond):
 				}
-				if v, ok := getCached(); ok {
+				v, err := getCached()
+				if err == nil {
 					return v, nil
 				}
 			}
